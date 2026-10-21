@@ -68,6 +68,8 @@ input[type=color]{width:30px;height:26px;padding:0;border:2px solid rgba(255,255
 .slot.bp .badge{position:absolute;right:3px;top:2px;background:var(--accent);color:#111;border-radius:9px;font-size:11px;font-weight:800;min-width:16px;padding:0 4px;text-align:center}
 .slot.bp .badge:empty{display:none}
 .slot.bp.open{border-color:#c9a66b}
+#dropMsg{display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-size:22px;font-weight:700;z-index:8;border:4px dashed var(--accent);pointer-events:none}
+body.dropping #dropMsg{display:flex}
 .shead{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#b9c0c6;margin:14px 0 6px}
 .ticks{display:flex;justify-content:space-between;font-size:11px;color:#9aa3aa;margin-bottom:8px}
 input[type=range].circ{-webkit-appearance:none;appearance:none;width:100%;height:10px;margin:10px 0 4px;border-radius:5px;background:linear-gradient(90deg,#4b974b,#ffe14a,#c4281c);outline:none;border:1px solid rgba(255,255,255,.35)}
@@ -163,6 +165,8 @@ body.touch .slot svg{width:30px;height:30px}
   <button id="resetBtn" class="mbtn" type="button">Reset Character (R)</button>
   <button id="camBtn" class="mbtn" type="button">Reset Camera</button>
   <button id="mapBtn" class="mbtn" type="button">Reset Map</button>
+  <button id="brkBtn" class="mbtn" type="button">Open .brk map… (experimental)</button>
+  <input type="file" id="brkInput" accept=".brk,.txt,text/plain" hidden>
   <div class="settings">
     <div class="shead">Controls</div>
     <div class="srow"><label for="sensRange">Camera sensitivity</label><span id="sensVal">1.00×</span></div>
@@ -216,6 +220,7 @@ body.touch .slot svg{width:30px;height:30px}
 
 <div id="stick"><div id="knob"></div></div>
 <button id="jumpBtn" type="button">JUMP</button>
+<div id="dropMsg">Drop a .brk file to open it</div>
 <div id="fade"></div>
 <div id="load">Loading NeoBricks…</div>
 <div id="error"><div><h2>Couldn't start the 3D world</h2><p>This demo loads Three.js from a CDN, so an internet connection is required. Open the file in a modern browser with WebGL enabled, then reload.</p><p id="errorDetail"></p></div></div>
@@ -291,6 +296,7 @@ sun.shadow.mapSize.set(2048,2048);
 const sc=sun.shadow.camera;sc.left=-45;sc.right=45;sc.top=45;sc.bottom=-45;sc.near=1;sc.far=200;
 sun.shadow.bias=-.0004;sun.shadow.normalBias=.04;
 scene.add(sun);scene.add(sun.target);
+const ambientL=new THREE.AmbientLight(0x000000,1);scene.add(ambientL);   // used by .brk maps (their "ambient colour")
 
 /* ---------- Skybox ---------- */
 const sky=new THREE.Group();scene.add(sky);
@@ -370,8 +376,9 @@ function makePart(o){
  const mesh=new THREE.Mesh(UNIT,[side,side,top,bot,side,side]);
  mesh.scale.set(o.w,o.h,o.d);mesh.position.set(o.x,o.y,o.z);
  mesh.castShadow=!o.isBase;mesh.receiveShadow=true;scene.add(mesh);
- const p={mesh,side,top,bot,x:o.x,y:o.y,z:o.z,w:o.w,h:o.h,d:o.d,hex:o.hex,locked:!!o.locked,isBase:!!o.isBase,
+ const p={mesh,side,top,bot,x:o.x,y:o.y,z:o.z,w:o.w,h:o.h,d:o.d,hex:o.hex,locked:!!o.locked,isBase:!!o.isBase,noCollide:!!o.noCollide,alpha:o.alpha===undefined?1:o.alpha,name:o.name||'',
   anchored:true,sleeping:false,vx:0,vy:0,vz:0,omega:new THREE.Vector3(),rest:0,speed:0};
+ if(p.alpha<1){for(const m of [side,top,bot]){m.transparent=true;m.opacity=clamp(p.alpha,.05,1);m.depthWrite=false;}mesh.castShadow=false;}
  mesh.userData.part=p;parts.push(p);return p;
 }
 function paintPart(p,hex){
@@ -394,7 +401,7 @@ function removePart(p){
  wakeAll();
 }
 const partMeshes=()=>parts.map(p=>p.mesh);
-let basePart=null;
+let basePart=null,baseHalf=HALF,spawnPoint={x:0,y:1,z:0},envClouds=true,maxParts=MAX_PARTS;
 function buildMap(){
  basePart=makePart({x:0,y:-10,z:0,w:HALF*2,h:20,d:HALF*2,hex:BASE_HEX,locked:true,isBase:true});
  const block=(x,z,w,d,h,hex)=>makePart({x,y:h/2,z,w,h,d,hex});
@@ -690,7 +697,7 @@ let equipped=null,toolBlend=0,useT=0,faceT=0,faceAngle=0,cooldown=0;
 
 function respawn(){
  fade.style.opacity=1;setTimeout(()=>{fade.style.opacity=0;},140);
- pos.x=0;pos.y=1;pos.z=0;vx=vy=vz=kx=kz=0;grounded=true;climbing=false;moveTarget=null;endDrag();
+ pos.x=spawnPoint.x;pos.y=spawnPoint.y;pos.z=spawnPoint.z;vx=vy=vz=kx=kz=0;grounded=true;climbing=false;moveTarget=null;endDrag();
 }
 function setShiftLock(on){
  if(on===shiftLock)return;
@@ -709,7 +716,7 @@ $('#resetBtn').addEventListener('click',()=>{setMenu(false);respawn();});
 const resetCamera=()=>{yaw=facing+Math.PI;pitch=.38;camDist=12.5;};
 $('#camBtn').addEventListener('click',()=>{resetCamera();setMenu(false);});
 $('#mapBtn').addEventListener('click',()=>{
- setMenu(false);deselect();while(parts.length)removePart(parts[0]);buildMap();respawn();toast('Map reset');
+ setMenu(false);loadDefaultMap();respawn();toast('Map reset');
 });
 (()=>{
  // camera sensitivity
@@ -892,14 +899,14 @@ function useTool(cx,cy){
  if(id==='move'||id==='scale'){select(p,id==='move'?'move':'scale');return;}
  if(id==='delete'){poof(p,14);removePart(p);return;}
  if(id==='clone'){
-  if(parts.length>=MAX_PARTS){toast('Part limit reached ('+MAX_PARTS+')');return;}
-  const [ax,sg]=dominantAxis(hit.normal),o={x:p.x,y:p.y,z:p.z,w:p.w,h:p.h,d:p.d,hex:p.hex};
+  if(parts.length>=maxParts){toast('Part limit reached');return;}
+  const [ax,sg]=dominantAxis(hit.normal),o={x:p.x,y:p.y,z:p.z,w:p.w,h:p.h,d:p.d,hex:p.hex,alpha:p.alpha,noCollide:p.noCollide};
   o[ax]+=sg*(ax==='x'?p.w:ax==='y'?p.h:p.d);
   const c=makePart(o);poof(c,6);
  }
 }
 function spawnPart(hit){
- if(parts.length>=MAX_PARTS){toast('Part limit reached ('+MAX_PARTS+')');return;}
+ if(parts.length>=maxParts){toast('Part limit reached');return;}
  const sz=spawnSize,half={x:sz.w/2,y:sz.h/2,z:sz.d/2},[ax,sg]=dominantAxis(hit.normal);
  const c={x:Math.round(hit.point.x),y:Math.round(hit.point.y),z:Math.round(hit.point.z)};
  c[ax]=hit.point[ax]+sg*half[ax];                         // flush against the clicked face
@@ -1083,7 +1090,7 @@ if(matchMedia('(hover:none) and (pointer:coarse)').matches)document.body.classLi
 
 /* ---------- Player physics (studs, studs/s) ---------- */
 // a flying (unanchored, fast-moving) part doesn't block the player until it settles
-const blocks=p=>p.anchored||p.sleeping||p.speed<6;
+const blocks=p=>!p.noCollide&&(p.anchored||p.sleeping||p.speed<6);
 const overlapY=(p,y)=>y<p.y+p.h/2-.02&&y+PH>p.y-p.h/2+.02;
 function clearAt(x,y,z){
  for(const p of parts){if(!blocks(p)||!overlapY(p,y))continue;if(Math.abs(x-p.x)<p.w/2+R&&Math.abs(z-p.z)<p.d/2+R)return false;}
@@ -1134,8 +1141,9 @@ function playerStep(h){
 /* ---------- Unanchored part physics ---------- */
 function resolveDyn(p,axis){
  let landed=false;
+ if(p.noCollide)return false;
  for(const q of parts){
-  if(q===p||(!q.anchored&&!q.sleeping))continue;
+  if(q===p||q.noCollide||(!q.anchored&&!q.sleeping))continue;
   const ox=(p.w+q.w)/2-Math.abs(p.x-q.x),oy=(p.h+q.h)/2-Math.abs(p.y-q.y),oz=(p.d+q.d)/2-Math.abs(p.z-q.z);
   if(axis==='y'){
    if(ox<=.02||oz<=.02||oy<=0)continue;
@@ -1307,7 +1315,7 @@ function frame(now){
  const shx=Math.cos(yaw)*shoulder,shz=-Math.sin(yaw)*shoulder;   // camera slides to the character's right shoulder
  const fy=pos.y+FOCUS_HEIGHT,cp=Math.cos(pitch);
  camera.position.set(pos.x+shx+Math.sin(yaw)*cp*camDist,fy+Math.sin(pitch)*camDist,pos.z+shz+Math.cos(yaw)*cp*camDist);
- if(Math.abs(camera.position.x)<HALF&&Math.abs(camera.position.z)<HALF)camera.position.y=Math.max(camera.position.y,.4);
+ if(Math.abs(camera.position.x)<baseHalf&&Math.abs(camera.position.z)<baseHalf)camera.position.y=Math.max(camera.position.y,.4);
  if(shake>.01)camera.position.add(tmpV.set(Math.random()-.5,Math.random()-.5,Math.random()-.5).multiplyScalar(shake));
  camera.lookAt(pos.x+shx,fy,pos.z+shz);
  const firstPerson=camDist<1;noob.visible=!firstPerson;
@@ -1321,6 +1329,99 @@ function frame(now){
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;applyRes();applyViewOffset();camera.updateProjectionMatrix();});
 
 
+/* ---------- .brk (Brick Hill "Brick Workshop" V0.2.0.0) support — experimental ----------
+   File layout:  header line, blank, 5 environment lines (ambient rgb / baseplate rgba / sky rgb / baseplate size / sun),
+   blank, then one line per brick:  x y z  sizeX sizeY sizeZ  r g b a   followed by tab-indented "+PROPERTY value" lines.
+   Brick Hill is Z-up and a brick's position is its minimum corner, so brick (x,y,z) becomes world (x, z, -y). */
+const BRK_VERSION='0.2.0.0',BRK_MAX=2500;
+function parseBrk(text){
+ const lines=String(text).replace(/^\uFEFF/,'').split(/\r\n|\r|\n/);
+ let i=0;while(i<lines.length&&!lines[i].trim())i++;
+ const m=/^B\s*R\s*I\s*C\s*K\s+W\s*O\s*R\s*K\s*S\s*H\s*O\s*P\s+V\s*(\d+(?:\.\d+)*)\s*$/i.exec((lines[i]||'').trim());
+ if(!m)throw new Error('this is not a Brick Workshop (.brk) file');
+ if(m[1]!==BRK_VERSION)throw new Error('unsupported .brk version V'+m[1]+' (only V'+BRK_VERSION+' works)');
+ i++;
+ const env=[];
+ while(env.length<5&&i<lines.length){
+  const t=lines[i++].trim();if(!t)continue;
+  const nums=t.split(/\s+/).map(Number);if(nums.some(n=>!isFinite(n)))throw new Error('bad environment line "'+t.slice(0,40)+'"');
+  env.push(nums);
+ }
+ if(env.length<5||env[0].length<3||env[1].length<4||env[2].length<3||env[3].length<1||env[4].length<1)throw new Error('the environment settings at the top of the file are incomplete');
+ const bricks=[],unsupported={};let cur=null,skipped=0;
+ for(;i<lines.length;i++){
+  const raw=lines[i];if(!raw.trim())continue;
+  if(/^\s/.test(raw)){   // a "+PROPERTY value" line belonging to the previous brick
+   const t=raw.trim();if(t[0]!=='+'||!cur)continue;
+   const sp=t.indexOf(' '),key=(sp<0?t:t.slice(0,sp)).slice(1).toUpperCase(),val=sp<0?'':t.slice(sp+1).trim();
+   if(key==='NAME')cur.name=val.slice(0,60);else if(key==='NOCOLLISION')cur.noCollide=true;else unsupported[key]=(unsupported[key]||0)+1;
+   continue;
+  }
+  const n=raw.trim().split(/\s+/).map(Number);
+  if(n.length<10||n.some(v=>!isFinite(v))||n[3]<=0||n[4]<=0||n[5]<=0){skipped++;cur=null;continue;}
+  cur={x:n[0],y:n[1],z:n[2],sx:n[3],sy:n[4],sz:n[5],r:n[6],g:n[7],b:n[8],a:n[9],name:'',noCollide:false};bricks.push(cur);
+ }
+ return {env:{ambient:env[0].slice(0,3),base:env[1].slice(0,4),sky:env[2].slice(0,3),baseSize:env[3][0],sun:env[4][0]},bricks,skipped,unsupported};
+}
+const rgbHex=a=>(Math.round(clamp(a[0],0,1)*255)<<16)|(Math.round(clamp(a[1],0,1)*255)<<8)|Math.round(clamp(a[2],0,1)*255);
+function applyEnv(e){   // e = null restores the default sky/sun
+ const top=dome.material.uniforms.top.value,hor=dome.material.uniforms.hor.value;
+ if(e){
+  const c=new THREE.Color(clamp(e.sky[0],0,1),clamp(e.sky[1],0,1),clamp(e.sky[2],0,1));
+  top.copy(c);hor.copy(c).lerp(new THREE.Color(1,1,1),.6);scene.background.copy(c);
+  ambientL.color.setRGB(clamp(e.ambient[0],0,1),clamp(e.ambient[1],0,1),clamp(e.ambient[2],0,1));
+  sun.intensity=.42*clamp(e.sun/300,0,3);envClouds=false;
+ }else{
+  top.setHex(0x2f76cc);hor.setHex(0xc6e1f7);scene.background.setHex(0x9cc7ee);ambientL.color.setHex(0x000000);sun.intensity=.42;envClouds=true;
+ }
+ for(const c of clouds)c.visible=QUALITY[settings.q-1].clouds&&envClouds;
+}
+function clearWorld(){deselect();while(parts.length)removePart(parts[0]);}
+function loadDefaultMap(){clearWorld();buildMap();baseHalf=HALF;spawnPoint={x:0,y:1,z:0};maxParts=MAX_PARTS;applyEnv(null);}
+function findSpawn(){   // closest free standing spot to the origin (maps often have bricks on the origin)
+ const free=(x,z)=>Math.abs(x)<=baseHalf-R&&Math.abs(z)<=baseHalf-R&&clearAt(x,.05,z);
+ if(free(0,0))return {x:0,y:.1,z:0};
+ for(let r=1;r<=Math.min(120,baseHalf);r++){
+  const n=Math.max(8,r*8);
+  for(let k=0;k<n;k++){const a=k/n*Math.PI*2,x=Math.cos(a)*r,z=Math.sin(a)*r;if(free(x,z))return {x,y:.1,z};}
+ }
+ let top=0;for(const p of parts)if(blocks(p)&&Math.abs(p.x)<p.w/2+R&&Math.abs(p.z)<p.d/2+R)top=Math.max(top,p.y+p.h/2);
+ return {x:0,y:top+.1,z:0};
+}
+function loadBrk(d,name){
+ const e=d.env,size=clamp(e.baseSize,1,2000),list=d.bricks.slice(0,BRK_MAX);
+ setMenu(false);clearWorld();
+ baseHalf=size/2;
+ basePart=makePart({x:0,y:-10,z:0,w:size,h:20,d:size,hex:rgbHex(e.base),alpha:e.base[3],locked:true,isBase:true});
+ for(const b of list){
+  makePart({x:b.x+b.sx/2,y:b.z+b.sz/2,z:-(b.y+b.sy/2),w:b.sx,h:b.sz,d:b.sy,hex:rgbHex([b.r,b.g,b.b]),alpha:b.a,noCollide:b.noCollide,name:b.name});
+ }
+ applyEnv(e);maxParts=parts.length+MAX_PARTS;
+ spawnPoint=findSpawn();respawn();resetCamera();
+ const ign=Object.keys(d.unsupported);
+ let msg='Loaded "'+name+'" — '+list.length+' brick'+(list.length===1?'':'s');
+ if(d.bricks.length>list.length)msg+=' (only the first '+BRK_MAX+' of '+d.bricks.length+')';
+ if(d.skipped)msg+=', '+d.skipped+' invalid line'+(d.skipped===1?'':'s')+' skipped';
+ if(ign.length)msg+='. Ignored properties: '+ign.slice(0,6).join(', ');
+ toast(msg,6000);
+}
+function readFileText(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result));r.onerror=()=>rej(r.error);r.readAsText(file);});}
+async function openBrkFile(file){
+ if(!file)return;
+ if(file.size>20*1024*1024){toast('That file is too big (max 20 MB)');return;}
+ let text;try{text=await readFileText(file);}catch(_){toast('Could not read that file');return;}
+ try{loadBrk(parseBrk(text),file.name);}catch(err){toast('Could not open it: '+((err&&err.message)||err),6000);}
+}
+$('#brkBtn').addEventListener('click',()=>{$('#brkInput').click();$('#brkBtn').blur();});
+$('#brkInput').addEventListener('change',()=>{const f=$('#brkInput').files&&$('#brkInput').files[0];$('#brkInput').value='';openBrkFile(f);});
+(()=>{   // drag a .brk file onto the page
+ let depth=0;const hasFiles=e=>!!(e.dataTransfer&&e.dataTransfer.types&&[...e.dataTransfer.types].includes('Files'));
+ addEventListener('dragenter',e=>{if(!hasFiles(e))return;e.preventDefault();depth++;document.body.classList.add('dropping');});
+ addEventListener('dragover',e=>{if(hasFiles(e))e.preventDefault();});
+ addEventListener('dragleave',e=>{if(!hasFiles(e))return;depth=Math.max(0,depth-1);if(!depth)document.body.classList.remove('dropping');});
+ addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();depth=0;document.body.classList.remove('dropping');openBrkFile(e.dataTransfer.files[0]);});
+})();
+
 function applyRes(){
  const q=QUALITY[settings.q-1],pr=clamp(Math.min(window.devicePixelRatio||1,q.cap)*settings.res/100,.25,3);
  renderer.setPixelRatio(pr);renderer.setSize(innerWidth,innerHeight);
@@ -1329,7 +1430,7 @@ function applyGraphics(){
  const q=QUALITY[settings.q-1];
  sun.castShadow=settings.shadows;
  if(sun.shadow.mapSize.x!==q.map){sun.shadow.mapSize.set(q.map,q.map);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}
- for(const c of clouds)c.visible=q.clouds;
+ for(const c of clouds)c.visible=q.clouds&&envClouds;
  applyRes();
 }
 yaw=Math.PI;
