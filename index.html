@@ -70,6 +70,12 @@ input[type=color]{width:30px;height:26px;padding:0;border:2px solid rgba(255,255
 .slot.bp.open{border-color:#c9a66b}
 #dropMsg{display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-size:22px;font-weight:700;z-index:8;border:4px dashed var(--accent);pointer-events:none}
 body.dropping #dropMsg{display:flex}
+#dlg{display:none;position:absolute;inset:0;background:rgba(0,0,0,.55);align-items:center;justify-content:center;z-index:9}
+#dlg.open{display:flex}
+#dlg .box{width:min(380px,calc(100vw - 30px));background:var(--panel);border:2px solid #fff;border-radius:6px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#dlg p{margin:0 0 12px;font-size:15px;line-height:1.5}
+#dlg .row{display:flex;gap:8px}
+#dlg .row .mbtn{margin:0;flex:1}
 .shead{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#b9c0c6;margin:14px 0 6px}
 .ticks{display:flex;justify-content:space-between;font-size:11px;color:#9aa3aa;margin-bottom:8px}
 input[type=range].circ{-webkit-appearance:none;appearance:none;width:100%;height:10px;margin:10px 0 4px;border-radius:5px;background:linear-gradient(90deg,#4b974b,#ffe14a,#c4281c);outline:none;border:1px solid rgba(255,255,255,.35)}
@@ -167,6 +173,7 @@ body.touch .slot svg{width:30px;height:30px}
   <button id="mapBtn" class="mbtn" type="button">Reset Map</button>
   <button id="brkBtn" class="mbtn" type="button">Open .brk map… (experimental)</button>
   <input type="file" id="brkInput" accept=".brk,.txt,text/plain" hidden>
+  <button id="brkExpBtn" class="mbtn" type="button">Export map as .brk</button>
   <div class="settings">
     <div class="shead">Controls</div>
     <div class="srow"><label for="sensRange">Camera sensitivity</label><span id="sensVal">1.00×</span></div>
@@ -221,6 +228,7 @@ body.touch .slot svg{width:30px;height:30px}
 <div id="stick"><div id="knob"></div></div>
 <button id="jumpBtn" type="button">JUMP</button>
 <div id="dropMsg">Drop a .brk file to open it</div>
+<div id="dlg"><div class="box"><p id="dlgMsg"></p><div class="row"><button id="dlgNo" class="mbtn" type="button">No</button><button id="dlgYes" class="mbtn" type="button">Yes</button></div></div></div>
 <div id="fade"></div>
 <div id="load">Loading NeoBricks…</div>
 <div id="error"><div><h2>Couldn't start the 3D world</h2><p>This demo loads Three.js from a CDN, so an internet connection is required. Open the file in a modern browser with WebGL enabled, then reload.</p><p id="errorDetail"></p></div></div>
@@ -402,6 +410,7 @@ function removePart(p){
 }
 const partMeshes=()=>parts.map(p=>p.mesh);
 let basePart=null,baseHalf=HALF,spawnPoint={x:0,y:1,z:0},envClouds=true,maxParts=MAX_PARTS;
+let spawnParts=[],curEnv=null,brkJob=0,mapName=null;   // spawnParts: imported bricks named like "SpawnPoint"
 function buildMap(){
  basePart=makePart({x:0,y:-10,z:0,w:HALF*2,h:20,d:HALF*2,hex:BASE_HEX,locked:true,isBase:true});
  const block=(x,z,w,d,h,hex)=>makePart({x,y:h/2,z,w,h,d,hex});
@@ -695,9 +704,17 @@ const hideHint=()=>hint.classList.add('hidden');
 setTimeout(hideHint,9000);
 let equipped=null,toolBlend=0,useT=0,faceT=0,faceAngle=0,cooldown=0;
 
+function pickSpawn(){   // a random spawn brick if the map has any, otherwise the default spawn point
+ spawnParts=spawnParts.filter(q=>parts.includes(q));
+ if(!spawnParts.length)return spawnPoint;
+ const q=spawnParts[Math.floor(Math.random()*spawnParts.length)];
+ const mx=Math.min(2.5,Math.max(0,q.w/2-R)),mz=Math.min(2.5,Math.max(0,q.d/2-R));
+ return {x:q.x+(Math.random()*2-1)*mx,y:q.y+q.h/2+.1,z:q.z+(Math.random()*2-1)*mz};
+}
 function respawn(){
  fade.style.opacity=1;setTimeout(()=>{fade.style.opacity=0;},140);
- pos.x=spawnPoint.x;pos.y=spawnPoint.y;pos.z=spawnPoint.z;vx=vy=vz=kx=kz=0;grounded=true;climbing=false;moveTarget=null;endDrag();
+ const sp=pickSpawn();
+ pos.x=sp.x;pos.y=sp.y;pos.z=sp.z;vx=vy=vz=kx=kz=0;grounded=true;climbing=false;moveTarget=null;endDrag();
 }
 function setShiftLock(on){
  if(on===shiftLock)return;
@@ -1376,8 +1393,8 @@ function applyEnv(e){   // e = null restores the default sky/sun
  }
  for(const c of clouds)c.visible=QUALITY[settings.q-1].clouds&&envClouds;
 }
-function clearWorld(){deselect();while(parts.length)removePart(parts[0]);}
-function loadDefaultMap(){clearWorld();buildMap();baseHalf=HALF;spawnPoint={x:0,y:1,z:0};maxParts=MAX_PARTS;applyEnv(null);}
+function clearWorld(){brkJob++;spawnParts=[];deselect();while(parts.length)removePart(parts[0]);}
+function loadDefaultMap(){clearWorld();buildMap();baseHalf=HALF;spawnPoint={x:0,y:1,z:0};maxParts=MAX_PARTS;curEnv=null;mapName=null;applyEnv(null);}
 function findSpawn(){   // closest free standing spot to the origin (maps often have bricks on the origin)
  const free=(x,z)=>Math.abs(x)<=baseHalf-R&&Math.abs(z)<=baseHalf-R&&clearAt(x,.05,z);
  if(free(0,0))return {x:0,y:.1,z:0};
@@ -1388,23 +1405,88 @@ function findSpawn(){   // closest free standing spot to the origin (maps often 
  let top=0;for(const p of parts)if(blocks(p)&&Math.abs(p.x)<p.w/2+R&&Math.abs(p.z)<p.d/2+R)top=Math.max(top,p.y+p.h/2);
  return {x:0,y:top+.1,z:0};
 }
+function askDialog(msg,yes,no){
+ return new Promise(res=>{
+  setShiftLock(false);keys.clear();jumpHeld=false;
+  $('#dlgMsg').textContent=msg;$('#dlgYes').textContent=yes;$('#dlgNo').textContent=no;
+  const dlg=$('#dlg'),y=$('#dlgYes'),n=$('#dlgNo');dlg.classList.add('open');
+  const done=v=>{dlg.classList.remove('open');y.onclick=n.onclick=null;res(v);};
+  y.onclick=()=>done(true);n.onclick=()=>done(false);
+ });
+}
+const SPAWN_RE=/spawn/i;   // "spawnpoint", "SpawnPoint", "SpawnLocation", "spawn_location", "Spawn"...
+function addBrick(b){
+ const q=makePart({x:b.x+b.sx/2,y:b.z+b.sz/2,z:-(b.y+b.sy/2),w:b.sx,h:b.sz,d:b.sy,hex:rgbHex([b.r,b.g,b.b]),alpha:b.a,noCollide:b.noCollide,name:b.name});
+ if(SPAWN_RE.test(q.name))spawnParts.push(q);
+ return q;
+}
+function loadRestOfBrk(rest,job){   // keeps adding the remaining bricks in small batches so the page stays responsive
+ let i=0;const total=rest.length;
+ const step=()=>{
+  if(job!==brkJob)return;   // another map was opened (or the map was reset) meanwhile
+  const end=Math.min(i+300,total);
+  for(;i<end;i++)addBrick(rest[i]);
+  maxParts=parts.length+MAX_PARTS;
+  if(i<total){toast('Loading the rest of the build… '+(BRK_MAX+i)+' / '+(BRK_MAX+total),1500);setTimeout(step,16);}
+  else toast('Finished loading all '+(BRK_MAX+total)+' bricks',4000);
+ };
+ step();
+}
 function loadBrk(d,name){
- const e=d.env,size=clamp(e.baseSize,1,2000),list=d.bricks.slice(0,BRK_MAX);
+ const e=d.env,size=clamp(e.baseSize,1,2000),list=d.bricks.slice(0,BRK_MAX),rest=d.bricks.slice(BRK_MAX);
  setMenu(false);clearWorld();
- baseHalf=size/2;
+ const job=brkJob;
+ baseHalf=size/2;curEnv=e;mapName=String(name||'').replace(/\.[^.]*$/,'').replace(/[^\w\- ]+/g,'_').slice(0,60)||null;
  basePart=makePart({x:0,y:-10,z:0,w:size,h:20,d:size,hex:rgbHex(e.base),alpha:e.base[3],locked:true,isBase:true});
- for(const b of list){
-  makePart({x:b.x+b.sx/2,y:b.z+b.sz/2,z:-(b.y+b.sy/2),w:b.sx,h:b.sz,d:b.sy,hex:rgbHex([b.r,b.g,b.b]),alpha:b.a,noCollide:b.noCollide,name:b.name});
- }
+ for(const b of list)addBrick(b);
  applyEnv(e);maxParts=parts.length+MAX_PARTS;
  spawnPoint=findSpawn();respawn();resetCamera();
  const ign=Object.keys(d.unsupported);
  let msg='Loaded "'+name+'" — '+list.length+' brick'+(list.length===1?'':'s');
- if(d.bricks.length>list.length)msg+=' (only the first '+BRK_MAX+' of '+d.bricks.length+')';
+ if(spawnParts.length)msg+=', '+spawnParts.length+' spawn point'+(spawnParts.length===1?'':'s');
+ if(rest.length)msg+=' (first '+BRK_MAX+' of '+d.bricks.length+')';
  if(d.skipped)msg+=', '+d.skipped+' invalid line'+(d.skipped===1?'':'s')+' skipped';
  if(ign.length)msg+='. Ignored properties: '+ign.slice(0,6).join(', ');
  toast(msg,6000);
+ if(rest.length){
+  askDialog('This build is big: it has '+d.bricks.length+' bricks and only the first '+BRK_MAX+' are loaded. Do you want to load the remaining '+rest.length+'? Loading everything may make the game slow on weaker devices.','Load the rest','Keep '+BRK_MAX)
+   .then(yes=>{if(yes&&job===brkJob)loadRestOfBrk(rest,job);});
+ }
 }
+/* ---------- export ---------- */
+const fnum=n=>{let t=(+n).toFixed(6);if(t.indexOf('.')>=0)t=t.replace(/0+$/,'').replace(/\.$/,'');return (t==='-0'||t==='')?'0':t;};
+const hexRgb=h=>[((h>>16)&255)/255,((h>>8)&255)/255,(h&255)/255];
+function defaultEnv(){return {ambient:[0,0,0],base:[...hexRgb(BASE_HEX),1],sky:hexRgb(0x2f76cc),baseSize:HALF*2,sun:300};}
+function buildBrkText(){
+ const e=curEnv||defaultEnv(),base=basePart?[...hexRgb(basePart.hex),basePart.alpha]:e.base;
+ const L=['B R I C K  W O R K S H O P  V'+BRK_VERSION,'',
+  e.ambient.slice(0,3).map(fnum).join(' '),
+  base.slice(0,4).map(fnum).join(' '),
+  e.sky.slice(0,3).map(fnum).join(' '),
+  fnum(e.baseSize),
+  fnum(e.sun),''];
+ let n=0;
+ for(const q of parts){
+  if(q.isBase)continue;
+  const c=hexRgb(q.hex);
+  // world (x,y,z) centre -> Brick Hill min-corner, Z-up
+  L.push([q.x-q.w/2,-q.z-q.d/2,q.y-q.h/2,q.w,q.d,q.h,c[0],c[1],c[2],q.alpha].map(fnum).join(' '));
+  const nm=String(q.name||'').replace(/[\r\n\t]+/g,' ').trim();
+  if(nm)L.push('\t+NAME '+nm);
+  if(q.noCollide)L.push('\t+NOCOLLISION');
+  n++;
+ }
+ return {text:L.join('\r\n')+'\r\n',count:n};
+}
+function exportBrk(){
+ try{
+  const r=buildBrkText(),blob=new Blob([r.text],{type:'text/plain'}),url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=(mapName||'neobricks-map')+'.brk';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast('Exported '+r.count+' brick'+(r.count===1?'':'s')+' as '+a.download,4000);
+ }catch(err){toast('Could not export: '+((err&&err.message)||err),5000);}
+}
+$('#brkExpBtn').addEventListener('click',()=>{setMenu(false);exportBrk();});
 function readFileText(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result));r.onerror=()=>rej(r.error);r.readAsText(file);});}
 async function openBrkFile(file){
  if(!file)return;
@@ -1441,4 +1523,4 @@ requestAnimationFrame(frame);
 })();
 </script>
 </body>
-</html>
+ </html>
