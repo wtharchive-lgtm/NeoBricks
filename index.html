@@ -108,6 +108,15 @@ input[type=range].circ::-moz-range-thumb{width:18px;height:18px;border-radius:50
 .doll .d-larm{grid-column:4;grid-row:2}
 .doll .d-rleg{grid-column:2;grid-row:3}
 .doll .d-lleg{grid-column:3;grid-row:3}
+.tabs{display:flex;gap:4px;margin:12px 0 2px}
+.tabs button{flex:1;padding:8px 2px;background:#393b3d;color:#fff;border:1px solid #fff;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer}
+.tabs button.sel{background:#fff;color:#111}
+.agrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.tile{aspect-ratio:1;padding:0;border:2px solid #111;border-radius:6px;background:var(--tb,#444);cursor:pointer;overflow:hidden;position:relative;color:#fff;font-size:12px;font-weight:700;font-family:inherit}
+.tile:hover{filter:brightness(1.12)}
+.tile img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+.tile.sel{outline:3px solid #fff;outline-offset:2px;z-index:1}
+.gmsg{font-size:13px;color:#cfd4d8;text-align:center;margin-top:10px;line-height:1.5}
 #editing{text-align:center;font-size:14px;color:var(--accent);font-weight:700;margin:6px 0 2px}
 #palette{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
 #palette .sw{width:100%;height:34px}
@@ -121,7 +130,7 @@ input[type=range].circ::-moz-range-thumb{width:18px;height:18px;border-radius:50
 #saveStatus{min-height:20px;margin-top:10px;text-align:center;font-size:13px;color:#cfd4d8}
 #saveStatus.warn{color:var(--accent)}
 #saveStatus.bad{color:#ff8d8d}
-body.editing #above,body.editing #hotbar,body.editing #paintBar,body.editing #spawnBar,body.editing #board,body.editing #hint,body.editing #stick,body.editing #jumpBtn,body.editing #topbar{display:none!important}
+body.editing #above,body.editing #hotbar,body.editing #paintBar,body.editing #spawnBar,body.editing #board,body.editing #hint,body.editing #stick,body.editing #jumpBtn,body.editing #lockBtn,body.editing #camPad,body.editing #topbar{display:none!important}
 @media (max-width:720px){
  #editor{top:auto;left:0;width:auto;height:min(58vh,460px);border-left:0;border-top:2px solid #fff;transform:translateY(105%);padding:12px 14px}
  #editor.open{transform:none}
@@ -130,6 +139,13 @@ body.editing #above,body.editing #hotbar,body.editing #paintBar,body.editing #sp
  #palette .sw{height:28px}
 }
 
+#lockBtn{display:none;position:absolute;right:12px;top:84px;width:46px;height:46px;padding:0;border-radius:50%;background:rgba(255,255,255,.88);border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.45);font-size:22px;line-height:1;z-index:3;touch-action:none;cursor:pointer}
+body.slui #lockBtn{display:block}
+#lockBtn.on{background:rgba(255,255,255,.55)}
+#camPad{display:none;position:absolute;right:10px;bottom:134px;grid-template-columns:repeat(3,42px);grid-auto-rows:42px;gap:4px;z-index:3;touch-action:none}
+body.campad #camPad{display:grid}
+#camPad button{padding:0;border-radius:8px;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:18px;font-weight:700;line-height:1;touch-action:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#camPad button.on,#camPad button:focus-visible{background:rgba(255,255,255,.5);outline:none}
 #stick,#jumpBtn{display:none;position:absolute;z-index:3;touch-action:none}
 body.pad #stick,body.pad #jumpBtn{display:block}
 #stick{left:24px;bottom:26px;width:128px;height:128px;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.4)}
@@ -179,7 +195,8 @@ body.touch .slot svg{width:30px;height:30px}
     <div class="srow"><label for="sensRange">Camera sensitivity</label><span id="sensVal">1.00×</span></div>
     <input type="range" id="sensRange" class="circ plain" min="0.25" max="3" step="0.05" value="1">
     <div class="srow" style="margin-top:10px"><span>Click to move</span><button id="ctmBtn" class="mbtn sm" type="button">Off</button></div>
-    <div class="srow" style="margin-top:10px"><span>Shift lock (Shift key)</span><button id="slBtn" class="mbtn sm" type="button">Off</button></div>
+    <div class="srow" style="margin-top:10px"><span id="slLabel">Shift lock (Shift key)</span><button id="slBtn" class="mbtn sm" type="button">Off</button></div>
+    <div class="srow" style="margin-top:10px"><span>On-screen camera arrows &amp; zoom</span><button id="campadBtn" class="mbtn sm" type="button">Off</button></div>
     <div class="srow" style="margin-top:10px"><span>On-screen joystick &amp; jump</span><button id="padBtn" class="mbtn sm" type="button">Off</button></div>
     <div class="shead">Display</div>
     <div class="srow"><span>Fullscreen</span><button id="fsBtn" class="mbtn sm" type="button">Off</button></div>
@@ -194,7 +211,8 @@ body.touch .slot svg{width:30px;height:30px}
   </div>
   <div class="controls">
     <div><b>W A S D</b> Move</div>
-    <div><b>← →</b> Turn camera</div>
+    <div><b>← → ↑ ↓</b> Move camera</div>
+    <div><b>I / O</b> Zoom out / in</div>
     <div><b>Space</b> Jump (hold to keep jumping)</div>
     <div><b>Walk into parts</b> Climb small ledges</div>
     <div><b>1 – 7</b> Equip / unequip tool</div>
@@ -211,12 +229,27 @@ body.touch .slot svg{width:30px;height:30px}
   <h2>Customize Avatar</h2>
   <label class="f" for="nameInput">Name</label>
   <input id="nameInput" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Noob">
+  <div class="tabs" id="edTabs">
+    <button type="button" data-tab="colors" class="sel">Body colors</button>
+    <button type="button" data-tab="shirts">T-shirts</button>
+    <button type="button" data-tab="faces">Faces</button>
+  </div>
+  <div id="tabColors">
   <label class="f">Body parts <span style="text-transform:none;letter-spacing:0;font-weight:400">(tap a part, then a colour)</span></label>
   <div class="doll" id="doll"></div>
   <div id="editing">Head</div>
   <label class="f">Colour</label>
   <div id="palette"></div>
   <div class="crow"><input type="color" id="customColor" aria-label="Custom colour"><span>Custom colour</span><code id="hexOut"></code></div>
+  </div>
+  <div id="tabShirts" hidden>
+    <label class="f">T-shirts <span style="text-transform:none;letter-spacing:0;font-weight:400">(tap one to wear it)</span></label>
+    <div class="agrid" id="gridShirts"></div><div class="gmsg" id="msgShirts"></div>
+  </div>
+  <div id="tabFaces" hidden>
+    <label class="f">Faces <span style="text-transform:none;letter-spacing:0;font-weight:400">(tap one to wear it)</span></label>
+    <div class="agrid" id="gridFaces"></div><div class="gmsg" id="msgFaces"></div>
+  </div>
   <div class="eact">
     <button id="saveBtn" class="mbtn" type="button">Save</button>
     <button id="defaultBtn" class="mbtn" type="button">Default</button>
@@ -227,6 +260,12 @@ body.touch .slot svg{width:30px;height:30px}
 
 <div id="stick"><div id="knob"></div></div>
 <button id="jumpBtn" type="button">JUMP</button>
+<button id="lockBtn" type="button" aria-label="Shift lock">🔓</button>
+<div id="camPad" aria-label="Camera controls">
+  <button type="button" data-k="zi" aria-label="Zoom in">+</button><button type="button" data-k="cu" aria-label="Camera up">▲</button><button type="button" data-k="zo" aria-label="Zoom out">−</button>
+  <button type="button" data-k="cl" aria-label="Camera left">◀</button><span></span><button type="button" data-k="cr" aria-label="Camera right">▶</button>
+  <span></span><button type="button" data-k="cd" aria-label="Camera down">▼</button><span></span>
+</div>
 <div id="dropMsg">Drop a .brk file to open it</div>
 <div id="dlg"><div class="box"><p id="dlgMsg"></p><div class="row"><button id="dlgNo" class="mbtn" type="button">No</button><button id="dlgYes" class="mbtn" type="button">Yes</button></div></div></div>
 <div id="fade"></div>
@@ -264,13 +303,15 @@ const QUALITY=[
  {name:'Medium',res:100,shadows:true,map:1024,cap:1.5,clouds:true},
  {name:'High',res:100,shadows:true,map:2048,cap:2,clouds:true},
  {name:'Ultra',res:100,shadows:true,map:4096,cap:2,clouds:true}];
-const settings={sens:1,pad:IS_TOUCH,padV:2,ctm:false,q:IS_TOUCH?3:4,res:null,shadows:null,stored:[]};
+const settings={sens:1,pad:IS_TOUCH,padV:2,ctm:false,slui:false,campad:false,q:IS_TOUCH?3:4,res:null,shadows:null,stored:[]};
 try{
  const o=JSON.parse(localStorage.getItem(SET_KEY)||'null');
  if(o&&typeof o==='object'){
   if(typeof o.sens==='number'&&isFinite(o.sens))settings.sens=clamp(o.sens,.25,3);
   if(o.padV===2&&typeof o.pad==='boolean')settings.pad=o.pad;   // (older saves had the pad on for everyone, so they are ignored)
   if(typeof o.ctm==='boolean')settings.ctm=o.ctm;
+  if(typeof o.slui==='boolean')settings.slui=o.slui;
+  if(typeof o.campad==='boolean')settings.campad=o.campad;
   if(Number.isInteger(o.q)&&o.q>=1&&o.q<=5)settings.q=o.q;
   if(typeof o.res==='number'&&isFinite(o.res))settings.res=clamp(Math.round(o.res/5)*5,25,150);
   if(typeof o.shadows==='boolean')settings.shadows=o.shadows;
@@ -436,20 +477,23 @@ buildMap();
 /* ---------- Avatar data ---------- */
 const PART_KEYS=['head','torso','larm','rarm','lleg','rleg'];
 const PART_LABEL={head:'Head',torso:'Torso',larm:'Left Arm',rarm:'Right Arm',lleg:'Left Leg',rleg:'Right Leg'};
-const DEFAULT_AVATAR={name:'Noob',colors:{head:'#f5cd30',torso:'#0d69ac',larm:'#f5cd30',rarm:'#f5cd30',lleg:'#a4bd47',rleg:'#a4bd47'}};
+const DEFAULT_AVATAR={name:'Noob',colors:{head:'#f5cd30',torso:'#0d69ac',larm:'#f5cd30',rarm:'#f5cd30',lleg:'#a4bd47',rleg:'#a4bd47'},shirt:'',face:''};   // shirt/face = PNG file name inside Assets/Shirts or Assets/Faces ('' = none / default face)
 const BRICK=['#f2f3f3','#e5e4df','#a3a2a5','#635f62','#1b2a35','#111111',
  '#c4281c','#da8541','#f5cd30','#a4bd47','#4b974b','#287f47',
  '#0d69ac','#6e99ca','#74869d','#203a56','#04afec','#00a7a3',
  '#6b327c','#a34b9e','#e4adc8','#ff98dc','#cc8e69','#d7c59a','#7c5c46','#694028',
  '#ff6b3d','#ffd966','#c7f464','#2ee6a6','#4f6bed','#9b59ff','#ff4d94','#8a1c3a','#3d5a40','#b5651d'];
 const STORE_KEY='neoBricks.avatar.v1',LEGACY_KEY='noobBaseplate.avatar.v1';
-const cloneAvatar=a=>({name:a.name,colors:Object.assign({},a.colors)});
+const okAsset=n=>typeof n==='string'&&n.length>0&&n.length<=120&&/\.png$/i.test(n)&&n[0]!=='.'&&!/[\\\/:*?"<>|\x00-\x1f]/.test(n);
+const cloneAvatar=a=>({name:a.name,colors:Object.assign({},a.colors),shirt:a.shirt||'',face:a.face||''});
 function cleanName(s){return String(s==null?'':s).replace(/[^\p{L}\p{N} _.\-]/gu,'').replace(/\s{2,}/g,' ').slice(0,20);}
 function sanitizeAvatar(o){
  const out=cloneAvatar(DEFAULT_AVATAR);
  if(!o||typeof o!=='object')return out;
  const n=cleanName(o.name).trim();if(n)out.name=n;
  if(o.colors&&typeof o.colors==='object')for(const k of PART_KEYS){const c=o.colors[k];if(typeof c==='string'&&/^#[0-9a-f]{6}$/i.test(c))out.colors[k]=c.toLowerCase();}
+ if(okAsset(o.shirt))out.shirt=o.shirt;
+ if(okAsset(o.face))out.face=o.face;
  return out;
 }
 function loadAvatar(){try{const raw=localStorage.getItem(STORE_KEY)||localStorage.getItem(LEGACY_KEY);return raw?sanitizeAvatar(JSON.parse(raw)):null;}catch(_){return null;}}
@@ -465,16 +509,24 @@ const headPts=[[0,-.6],[.5,-.6],[.58,-.55],[.6,-.45],[.6,.45],[.58,.55],[.5,.6],
 const head=new THREE.Group();head.position.set(0,4.6,0);noob.add(head);
 part(head,new THREE.LatheGeometry(headPts,32),avMats.head,0,0,0);
 part(head,studGeo,avMats.head,0,.7,0);
-(()=>{
- const c=document.createElement('canvas');c.width=256;c.height=200;const g=c.getContext('2d');
+const defaultFaceCanvas=document.createElement('canvas');let faceDefault=null,faceCustom=null,faceCustomMat=null;
+{
+ const c=defaultFaceCanvas;c.width=256;c.height=200;const g=c.getContext('2d');
  g.fillStyle='#111';
  for(const x of [88,168]){g.beginPath();g.ellipse(x,72,9,18,0,0,7);g.fill();}
  g.strokeStyle='#111';g.lineWidth=9;g.lineCap='round';g.beginPath();g.moveTo(66,118);g.quadraticCurveTo(128,190,190,118);g.stroke();
  const t=new THREE.CanvasTexture(c);t.anisotropy=maxAniso;
  const face=new THREE.Mesh(new THREE.CylinderGeometry(.604,.604,.82,24,1,true,-.85,1.7),
   new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
- face.position.y=.02;head.add(face);
-})();
+ face.position.y=.02;head.add(face);faceDefault=face;
+ // custom faces are square (1000x1000 PNGs), so they get their own square patch on the front of the head
+ faceCustomMat=new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+ faceCustom=new THREE.Mesh(new THREE.CylinderGeometry(.606,.606,.95,32,1,true,-.7865,1.573),faceCustomMat);
+ faceCustom.position.y=.02;faceCustom.visible=false;head.add(faceCustom);
+}
+// T-shirt: a decal on the front of the torso
+const shirtMat=new THREE.MeshLambertMaterial({transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+const shirtMesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),shirtMat);shirtMesh.position.set(0,3,.503);shirtMesh.visible=false;shirtMesh.receiveShadow=true;noob.add(shirtMesh);
 // the character's LEFT side is +x (it faces +z), its RIGHT side is -x
 const armPivots=[],legPivots=[];
 for(const side of [-1,1]){
@@ -503,8 +555,33 @@ function setNameTag(name){
  g.textAlign='center';g.textBaseline='middle';g.lineWidth=7;g.strokeStyle='#000';g.lineJoin='round';
  g.strokeText(name,128,34);g.fillStyle='#fff';g.fillText(name,128,34);tagTex.needsUpdate=true;
 }
+const assetURL=(kind,name)=>'Assets/'+kind+'/'+encodeURIComponent(name);
+const assetTexCache={};
+function loadAssetTex(url){
+ return assetTexCache[url]||(assetTexCache[url]=new Promise((res,rej)=>{
+  const im=new Image();im.crossOrigin='anonymous';
+  im.onload=()=>{const t=new THREE.Texture(im);t.anisotropy=maxAniso;t.needsUpdate=true;res(t);};
+  im.onerror=()=>{delete assetTexCache[url];rej(new Error('could not load '+url));};
+  im.src=url;
+ }));
+}
+let curShirt,curFace;   // what is currently shown (undefined = nothing applied yet)
+function setShirt(file){
+ file=file||'';if(file===curShirt)return;curShirt=file;
+ if(!file){shirtMesh.visible=false;return;}
+ loadAssetTex(assetURL('Shirts',file)).then(t=>{if(curShirt!==file)return;shirtMat.map=t;shirtMat.needsUpdate=true;shirtMesh.visible=true;})
+  .catch(()=>{if(curShirt===file)shirtMesh.visible=false;});
+}
+function setFace(file){
+ file=file||'';if(file===curFace)return;curFace=file;
+ const useDefault=()=>{faceDefault.visible=true;faceCustom.visible=false;};
+ if(!file){useDefault();return;}
+ loadAssetTex(assetURL('Faces',file)).then(t=>{if(curFace!==file)return;faceCustomMat.map=t;faceCustomMat.needsUpdate=true;faceCustom.visible=true;faceDefault.visible=false;})
+  .catch(()=>{if(curFace===file)useDefault();});   // missing file -> default face
+}
 function applyAvatar(a){
  for(const k of PART_KEYS)avMats[k].color.set(a.colors[k]);
+ setShirt(a.shirt);setFace(a.face);
  const n=a.name||'Noob';setNameTag(n);$('#boardName').textContent=n;
 }
 
@@ -698,7 +775,7 @@ let yaw=Math.PI,pitch=.38,camDist=12.5;
 const keys=new Set();let jumpHeld=false,menuOpen=false,editorOpen=false;
 const joy={x:0,y:0,active:false};
 const inputDir={x:0,z:0};
-const keyMap={KeyW:'f',ArrowUp:'f',KeyS:'b',ArrowDown:'b',KeyA:'l',KeyD:'r',ArrowLeft:'cl',ArrowRight:'cr'};
+const keyMap={KeyW:'f',KeyS:'b',KeyA:'l',KeyD:'r',ArrowLeft:'cl',ArrowRight:'cr',ArrowUp:'cu',ArrowDown:'cd',KeyI:'zo',KeyO:'zi'};   // c* = camera, z* = zoom
 const hint=$('#hint'),fade=$('#fade');
 const hideHint=()=>hint.classList.add('hidden');
 setTimeout(hideHint,9000);
@@ -719,14 +796,18 @@ function respawn(){
 function setShiftLock(on){
  if(on===shiftLock)return;
  shiftLock=on;slLocked=false;
- $('#cross').classList.toggle('on',on);$('#slBtn').textContent=on?'On':'Off';
+ $('#cross').classList.toggle('on',on);
+ if(!IS_TOUCH)$('#slBtn').textContent=on?'On':'Off';
+ const lb=$('#lockBtn');lb.textContent=on?'🔒':'🔓';lb.classList.toggle('on',on);
  if(on){
   hoverBox.visible=false;moveTarget=null;
-  try{const r=canvas.requestPointerLock?.();if(r&&r.catch)r.catch(()=>toast('Mouse lock was blocked — hold the right mouse button to look around'));}catch(_){}
-  toast('Shift lock on — press Shift to turn it off',1800);
+  if(!IS_TOUCH){   // touch screens never use pointer lock: it hijacks the finger events (broke camera drag and the joystick)
+   try{const r=canvas.requestPointerLock?.();if(r&&r.catch)r.catch(()=>toast('Mouse lock was blocked — hold the right mouse button to look around'));}catch(_){}
+  }
+  toast(IS_TOUCH?'Shift lock on — tap the lock to turn it off':'Shift lock on — press Shift to turn it off',1800);
  }else if(document.pointerLockElement===canvas)document.exitPointerLock();
 }
-function setMenu(open){menuOpen=open;$('#menu').classList.toggle('open',open);if(open){setShiftLock(false);moveTarget=null;keys.clear();jumpHeld=false;stopRightDrag();endDrag();}}
+function setMenu(open){menuOpen=open;$('#menu').classList.toggle('open',open);if(open){if(!IS_TOUCH)setShiftLock(false);moveTarget=null;keys.clear();jumpHeld=false;stopRightDrag();endDrag();}}
 $('#menuBtn').addEventListener('click',()=>{setMenu(!menuOpen);$('#menuBtn').blur();});
 $('#resumeBtn').addEventListener('click',()=>setMenu(false));
 $('#resetBtn').addEventListener('click',()=>{setMenu(false);respawn();});
@@ -748,7 +829,29 @@ $('#mapBtn').addEventListener('click',()=>{
  const ctmBtn=$('#ctmBtn');
  const showCtm=()=>{ctmBtn.textContent=settings.ctm?'On':'Off';};showCtm();
  ctmBtn.addEventListener('click',()=>{settings.ctm=!settings.ctm;if(!settings.ctm)moveTarget=null;showCtm();saveSettings();ctmBtn.blur();});
- $('#slBtn').addEventListener('click',()=>{if(shiftLock)setShiftLock(false);else{setMenu(false);setShiftLock(true);}$('#slBtn').blur();});
+ const slBtn=$('#slBtn');
+ if(IS_TOUCH){   // phones/tablets: the setting shows a lock button in the corner instead
+  $('#slLabel').textContent='Shift lock button';
+  const showSl=()=>{document.body.classList.toggle('slui',settings.slui);slBtn.textContent=settings.slui?'On':'Off';};showSl();
+  slBtn.addEventListener('click',()=>{settings.slui=!settings.slui;if(!settings.slui)setShiftLock(false);showSl();saveSettings();slBtn.blur();});
+ }else slBtn.addEventListener('click',()=>{if(shiftLock)setShiftLock(false);else{setMenu(false);setShiftLock(true);}slBtn.blur();});
+ $('#lockBtn').addEventListener('click',()=>{setShiftLock(!shiftLock);$('#lockBtn').blur();});
+ // on-screen camera arrows + zoom (for devices where dragging isn't possible)
+ const campadBtn=$('#campadBtn');
+ const showCampad=()=>{document.body.classList.toggle('campad',settings.campad);campadBtn.textContent=settings.campad?'On':'Off';};showCampad();
+ campadBtn.addEventListener('click',()=>{settings.campad=!settings.campad;if(!settings.campad)for(const k of['cl','cr','cu','cd','zi','zo'])keys.delete(k);showCampad();saveSettings();campadBtn.blur();});
+ for(const b of document.querySelectorAll('#camPad button')){
+  const k=b.dataset.k,up=()=>{keys.delete(k);b.classList.remove('on');};
+  b.addEventListener('pointerdown',e=>{e.preventDefault();keys.add(k);hideHint();b.classList.add('on');try{b.setPointerCapture(e.pointerId);}catch(_){}});
+  b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up);b.addEventListener('lostpointercapture',up);
+  b.addEventListener('contextmenu',e=>e.preventDefault());
+  b.addEventListener('click',e=>{   // a click without a pointer (TV remote / keyboard "Enter" on a focused button) nudges the camera one step
+   if(e.detail!==0)return;
+   if(k==='cl')yaw+=.25*sens;else if(k==='cr')yaw-=.25*sens;else if(k==='cu')pitch=clamp(pitch-.12*sens,-.35,1.4);else if(k==='cd')pitch=clamp(pitch+.12*sens,-.35,1.4);
+   else if(k==='zo')camDist=clamp(camDist*1.2,.5,120);else camDist=clamp(camDist/1.2,.5,120);
+   camTween=null;
+  });
+ }
  // graphics
  const gRange=$('#gfxRange'),gVal=$('#gfxVal'),rRange=$('#resRange'),rVal=$('#resVal'),shBtn=$('#shadowBtn');
  const showGfx=()=>{
@@ -1208,16 +1311,78 @@ nameInput.addEventListener('input',()=>{
  draft.name=v;applyAvatar(draft);renderEditor(true);
 });
 nameInput.addEventListener('keydown',e=>{if(e.key==='Enter')nameInput.blur();});
-const same=(a,b)=>(a.name||'Noob')===(b.name||'Noob')&&PART_KEYS.every(k=>a.colors[k]===b.colors[k]);
+const same=(a,b)=>(a.name||'Noob')===(b.name||'Noob')&&PART_KEYS.every(k=>a.colors[k]===b.colors[k])&&(a.shirt||'')===(b.shirt||'')&&(a.face||'')===(b.face||'');
 function renderEditor(keepName){
  for(const k of PART_KEYS){dollBtns[k].style.background=draft.colors[k];dollBtns[k].classList.toggle('sel',k===selPart);}
  $('#editing').textContent='Editing: '+PART_LABEL[selPart];
  const cur=draft.colors[selPart];customColor.value=cur;$('#hexOut').textContent=cur.toUpperCase();
  swBtns.forEach(b=>b.classList.toggle('sel',b.title===cur));
+ $('#gridShirts').style.setProperty('--tb',draft.colors.torso);$('#gridFaces').style.setProperty('--tb',draft.colors.head);
+ for(const t of document.querySelectorAll('#gridShirts .tile'))t.classList.toggle('sel',(t.dataset.file||'')===(draft.shirt||''));
+ for(const t of document.querySelectorAll('#gridFaces .tile'))t.classList.toggle('sel',(t.dataset.file||'')===(draft.face||''));
  if(!keepName&&nameInput.value!==draft.name)nameInput.value=draft.name;
  if(!same(draft,saved)){status.textContent='Unsaved changes — press Save to keep them.';status.className='warn';}
  else if(!status.dataset.keep){status.textContent='';status.className='';}
 }
+/* ---- T-shirts / Faces: the PNGs in Assets/Shirts and Assets/Faces ----
+   A static page cannot list a folder, so the list is found (in this order) from Assets/manifest.json
+   ({"shirts":["a.png"],"faces":["b.png"]}), from a web-server folder listing, or from the GitHub API when hosted on GitHub Pages. */
+const ASSET_DIRS={shirts:'Shirts',faces:'Faces'},assetLists={};
+async function fetchJSON(u){const r=await fetch(u,{cache:'no-cache'});if(!r.ok)throw new Error('http '+r.status);return r.json();}
+async function listAssets(kind){
+ const dir=ASSET_DIRS[kind];let names=null;
+ try{const m=await fetchJSON('Assets/manifest.json');const arr=m[kind]||m[dir]||m[dir.toLowerCase()];if(Array.isArray(arr))names=arr.map(x=>String(x).split('/').pop());}catch(_){}
+ if(!names)try{
+  const r=await fetch('Assets/'+dir+'/',{cache:'no-cache'});
+  if(r.ok){const t=await r.text(),out=[];for(const m of t.matchAll(/href="([^"?#]+)"/gi)){let h=m[1];try{h=decodeURIComponent(h);}catch(_){}h=h.split('/').pop();if(/\.png$/i.test(h))out.push(h);}if(out.length)names=out;}
+ }catch(_){}
+ if(!names)try{
+  const hm=/^([^.]+)\.github\.io$/i.exec(location.hostname);
+  if(hm){
+   const segs=location.pathname.split('/').filter(Boolean);if(segs.length&&/\.[a-z0-9]+$/i.test(segs[segs.length-1]))segs.pop();
+   const repo=segs.length?segs[0]:hm[1]+'.github.io',sub=segs.slice(1).join('/');
+   const j=await fetchJSON('https://api.github.com/repos/'+hm[1]+'/'+repo+'/contents/'+(sub?sub+'/':'')+'Assets/'+dir);
+   if(Array.isArray(j))names=j.filter(f=>f&&f.type==='file').map(f=>f.name);
+  }
+ }catch(_){}
+ if(!names)throw new Error('no list');
+ return [...new Set(names.filter(okAsset))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}));
+}
+function buildGrid(kind){
+ const L=assetLists[kind],grid=$(kind==='shirts'?'#gridShirts':'#gridFaces'),msg=$(kind==='shirts'?'#msgShirts':'#msgFaces');
+ grid.textContent='';
+ const field=kind==='shirts'?'shirt':'face',dir=ASSET_DIRS[kind];
+ const mk=(file,label)=>{
+  const b=document.createElement('button');b.type='button';b.className='tile';b.dataset.file=file;b.title=label;b.setAttribute('aria-label',label);
+  b.addEventListener('click',()=>{draft[field]=file;applyAvatar(draft);renderEditor();b.blur();});return b;
+ };
+ const none=mk('',kind==='shirts'?'No T-shirt':'Default face');
+ if(kind==='shirts')none.textContent='No shirt';
+ else{const im=new Image();im.alt='';im.src=defaultFaceCanvas.toDataURL();none.appendChild(im);}
+ grid.appendChild(none);
+ for(const f of L.files){
+  const b=mk(f,f.replace(/\.png$/i,'')),im=new Image();im.alt='';im.loading='lazy';im.decoding='async';im.draggable=false;
+  im.onerror=()=>{b.remove();};im.src=assetURL(dir,f);b.appendChild(im);grid.appendChild(b);
+ }
+ msg.textContent=L.state==='loading'?'Loading…':L.state==='fail'?'Could not read the Assets/'+dir+' folder. Put the PNGs there and (if the site cannot list folders) list them in Assets/manifest.json.':!L.files.length?'No PNGs found in Assets/'+dir+' yet.':'';
+ renderEditor(true);
+}
+function ensureAssets(kind){
+ const L=assetLists[kind]||(assetLists[kind]={state:'idle',files:[]});
+ if(L.state==='loading'||(L.state==='ok'&&L.files.length))return;
+ L.state='loading';buildGrid(kind);
+ listAssets(kind).then(f=>{L.files=f;L.state='ok';},()=>{L.state='fail';}).then(()=>buildGrid(kind));
+}
+let editTab='colors';
+function setTab(t){
+ editTab=t;
+ for(const b of document.querySelectorAll('#edTabs button'))b.classList.toggle('sel',b.dataset.tab===t);
+ $('#tabColors').hidden=t!=='colors';$('#tabShirts').hidden=t!=='shirts';$('#tabFaces').hidden=t!=='faces';
+ if(t==='shirts')ensureAssets('shirts');else if(t==='faces')ensureAssets('faces');
+ camTween={yaw:facing,pitch:t==='faces'?.1:.2,dist:t==='faces'?6:11.5};
+ renderEditor(true);
+}
+for(const b of document.querySelectorAll('#edTabs button'))b.addEventListener('click',()=>{setTab(b.dataset.tab);b.blur();});
 function applyViewOffset(){
  if(!editorOpen){camera.clearViewOffset();return;}
  const W=innerWidth,H=innerHeight;
@@ -1228,7 +1393,8 @@ function openEditor(){
  setMenu(false);setShiftLock(false);equip(null);keys.clear();jumpHeld=false;stopRightDrag();endDrag();
  editorOpen=true;draft=cloneAvatar(saved);status.dataset.keep='';status.textContent='';status.className='';
  editor.classList.add('open');document.body.classList.add('editing');renderEditor();applyViewOffset();
- camTween={yaw:facing,pitch:.2,dist:11.5};
+
+ setTab(editTab);
 }
 function closeEditor(){
  if(!editorOpen)return;
@@ -1261,7 +1427,11 @@ function frame(now){
  if(!menuOpen&&!editorOpen){
   ix=(keys.has('r')?1:0)-(keys.has('l')?1:0);iy=(keys.has('f')?1:0)-(keys.has('b')?1:0);
   if(joy.active){ix=joy.x;iy=joy.y;}
-  yaw+=((keys.has('cl')?1:0)-(keys.has('cr')?1:0))*2.0*sens*dt;
+  const camH=(keys.has('cl')?1:0)-(keys.has('cr')?1:0),camV=(keys.has('cd')?1:0)-(keys.has('cu')?1:0),camZ=(keys.has('zo')?1:0)-(keys.has('zi')?1:0);
+  if(camH||camV||camZ)camTween=null;
+  yaw+=camH*2.0*sens*dt;
+  if(camV)pitch=clamp(pitch+camV*1.5*sens*dt,-.35,1.4);
+  if(camZ)camDist=clamp(camDist*Math.exp(camZ*1.4*dt),.5,120);
  }
  const len=Math.hypot(ix,iy);if(len>1){ix/=len;iy/=len;}
  const fx_=-Math.sin(yaw),fz_=-Math.cos(yaw),rx=Math.cos(yaw),rz=-Math.sin(yaw);
@@ -1523,4 +1693,4 @@ requestAnimationFrame(frame);
 })();
 </script>
 </body>
- </html>
+</html>
